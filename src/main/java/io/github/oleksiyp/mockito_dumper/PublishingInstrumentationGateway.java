@@ -2,23 +2,29 @@ package io.github.oleksiyp.mockito_dumper;
 
 import com.lmax.disruptor.EventSink;
 
-public class PublishingObjectDumper implements ObjectDumper {
+public class PublishingInstrumentationGateway implements InstrumentationGateway {
     private final EventSink<StringBuilder> eventSink;
     private final Formatter formatter;
 
-    public PublishingObjectDumper(EventSink<StringBuilder> eventSink,
-                                  Formatter formatter) {
+    public PublishingInstrumentationGateway(EventSink<StringBuilder> eventSink,
+                                            Formatter formatter) {
         this.eventSink = eventSink;
         this.formatter = formatter;
     }
 
     @Override
-    public void dump(Object object) {
+    public void gwSetIntField(Object object, String field, int value) {
         eventSink.publishEvent((builder, sequence) -> {
             try {
                 builder.setLength(0);
                 formatter.outputFormatted(
                         object,
+                        builder);
+                builder.append(".");
+                builder.append(field);
+                builder.append(" = ");
+                formatter.outputFormatted(
+                        value,
                         builder);
             } catch (Throwable throwable) {
                 // skip any

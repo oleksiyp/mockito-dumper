@@ -1,6 +1,7 @@
 package io.github.oleksiyp.mockito_dumper;
 
 import com.lmax.disruptor.dsl.Disruptor;
+import io.github.oleksiyp.mockito_dumper.InstrumentationGateway.StaticRef;
 import javassist.*;
 
 import java.io.ByteArrayInputStream;
@@ -15,10 +16,8 @@ import java.util.Map;
 import java.util.WeakHashMap;
 
 public class JavaAgent {
-    public static ObjectDumper DUMPER = ObjectDumper.NOP;
-
-    public static final String DUMPER_INSTANCE_CLASS_NAME = JavaAgent.class.getName();
-    public static final String DUMPER_INSTANCE_FIELD_NAME = "DUMPER";
+    public static InstrumentationGateway GATEWAY = InstrumentationGateway.NOP;
+    public static final StaticRef GATEWAY_STATIC_REF = new StaticRef(JavaAgent.class, "GATEWAY");
 
     public static void premain(String args, Instrumentation inst) {
         if (args == null) {
@@ -44,13 +43,13 @@ public class JavaAgent {
             return;
         }
 
-        DUMPER = new PublishingObjectDumper(
+        GATEWAY = new PublishingInstrumentationGateway(
                 disruptor.start(),
                 formatter);
 
         inst.addTransformer(new ClassFileTransformer() {
             Map<ClassLoader, ClassPool> pools = Collections.synchronizedMap(new WeakHashMap<>());
-            DumpInFinalizeInstrumentation instrumentation = new DumpInFinalizeInstrumentation();
+            SetFieldInstrumentation instrumentation = new SetFieldInstrumentation();
 
             @Override
             public byte[] transform(ClassLoader classLoader,
@@ -92,9 +91,7 @@ public class JavaAgent {
                     }
 
                     boolean instrument = instrumentation
-                            .instrument(ctClass,
-                                    DUMPER_INSTANCE_CLASS_NAME,
-                                    DUMPER_INSTANCE_FIELD_NAME);
+                            .instrument(ctClass, GATEWAY_STATIC_REF);
 
                     if (instrument) {
                         System.out.println(className);

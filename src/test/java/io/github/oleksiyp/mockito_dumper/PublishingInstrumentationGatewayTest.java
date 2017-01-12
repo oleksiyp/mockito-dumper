@@ -7,19 +7,16 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.invocation.InvocationOnMock;
 import org.mockito.runners.MockitoJUnitRunner;
-import org.mockito.stubbing.Answer;
 
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 @RunWith(MockitoJUnitRunner.class)
-public class PublishingObjectDumperTest {
-    PublishingObjectDumper dumper;
+public class PublishingInstrumentationGatewayTest {
+    PublishingInstrumentationGateway dumper;
 
     @Mock
     EventSink<StringBuilder> eventSink;
@@ -29,18 +26,18 @@ public class PublishingObjectDumperTest {
 
     @Before
     public void setUp() throws Exception {
-        dumper = new PublishingObjectDumper(eventSink, formatter);
+        dumper = new PublishingInstrumentationGateway(eventSink, formatter);
     }
 
     @Test
     public void shouldPublishAnyObject() throws Exception {
-        dumper.dump(new TestObject());
+        dumper.gwSetIntField(new TestObject(), "fld", 5);
 
         verify(eventSink).publishEvent(any());
     }
 
     @Test
-    public void shouldPublishAndFormatInTranslator() throws Exception {
+    public void shouldFormatInTranslator() throws Exception {
         ArgumentCaptor<EventTranslator> captor = ArgumentCaptor.forClass(EventTranslator.class);
 
         StringBuilder buf = new StringBuilder();
@@ -55,9 +52,7 @@ public class PublishingObjectDumperTest {
 
         TestObject object = new TestObject();
 
-        dumper.dump(object);
-
-        verify(eventSink).publishEvent(any());
+        dumper.gwSetIntField(object, "fld", 33);
 
         verify(formatter).outputFormatted(same(object), same(buf));
     }
