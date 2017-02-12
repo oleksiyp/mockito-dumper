@@ -1,7 +1,7 @@
 package io.github.oleksiyp.mockito_dumper;
 
 import com.lmax.disruptor.dsl.Disruptor;
-import io.github.oleksiyp.mockito_dumper.InstrumentationGateway.StaticRef;
+import io.github.oleksiyp.mockito_dumper.FieldWriteGateway.StaticRef;
 import javassist.*;
 
 import java.io.ByteArrayInputStream;
@@ -16,7 +16,7 @@ import java.util.Map;
 import java.util.WeakHashMap;
 
 public class JavaAgent {
-    public static InstrumentationGateway GATEWAY = InstrumentationGateway.NOP;
+    public static FieldWriteGateway GATEWAY;
     public static final StaticRef GATEWAY_STATIC_REF = new StaticRef(JavaAgent.class, "GATEWAY");
 
     public static void premain(String args, Instrumentation inst) {
@@ -25,31 +25,29 @@ public class JavaAgent {
             return;
         }
 
-        Formatter formatter = new BasicFormatter();
-
-        Disruptor<StringBuilder> disruptor = new Disruptor<>(
-                () -> new StringBuilder(1024),
+        Disruptor<FieldWriteEvent> disruptor = new Disruptor<>(
+                FieldWriteEvent::new,
                 1024,
                 runnable -> {
-                    Thread thread = new Thread(runnable, "finalize dumper '" + args + "'");
+                    Thread thread = new Thread(runnable, "field tracker '" + args + "'");
                     thread.setDaemon(true);
                     return thread;
                 });
 
         try {
-            disruptor.handleEventsWith(new FileLoggingEventHandler(new File(args)));
+            disruptor.handleEventsWith(
+                    new FormattingFieldWriteEventHandler(
+                            new FileLoggingEventHandler(new File(args))));
         } catch (FileNotFoundException e) {
             e.printStackTrace();
             return;
         }
 
-        GATEWAY = new PublishingInstrumentationGateway(
-                disruptor.start(),
-                formatter);
+        GATEWAY = new PublishingFieldWriteGateway(disruptor.start());
 
         inst.addTransformer(new ClassFileTransformer() {
             Map<ClassLoader, ClassPool> pools = Collections.synchronizedMap(new WeakHashMap<>());
-            SetFieldInstrumentation instrumentation = new SetFieldInstrumentation();
+            FieldWriteInstrumentation instrumentation = new FieldWriteInstrumentation();
 
             @Override
             public byte[] transform(ClassLoader classLoader,
@@ -60,7 +58,10 @@ public class JavaAgent {
                 if (className == null
                         || className.startsWith("sun/")
                         || className.startsWith("java/")
-                        || className.startsWith("javax/")) {
+                        || className.startsWith("javax/")
+                        || className.startsWith("io/github/oleksiyp/mockito_dumper")
+                        || className.startsWith("gnu/trove")
+                        || className.equals("com/intellij/ide/plugins/PluginClassCache")) {
                     return  classfileBuffer;
                 }
 
